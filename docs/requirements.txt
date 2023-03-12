@@ -1,4 +1,4 @@
--e .
+#-e .
 pandas
 sphinx==5.3
 sphinx-copybutton
@@ -11,3 +11,4 @@ numpy-stl
 pyvista
 panel
 jupyterlab-myst
+sphinx-favicon

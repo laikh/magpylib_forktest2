@@ -289,3 +289,9 @@ html_js_files = [
 ]
 
 suppress_warnings = ["mystnb.unknown_mime_type"]
+
+favicons = [
+    "images/favicons/favicon-16x16.png",
+    "images/favicons/favicon-32x32.png",
+    "images/favicons/icon.ico",
+]
