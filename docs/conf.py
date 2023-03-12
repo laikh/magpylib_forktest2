@@ -72,7 +72,7 @@ from magpylib import __version__ as release
 
 # If your documentation needs a minimal Sphinx version, state it here.
 #
-needs_sphinx = "4.4.0"
+needs_sphinx = "5.3.0"
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
@@ -84,13 +84,10 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx.ext.ifconfig",
     "matplotlib.sphinxext.plot_directive",
-    # "nbsphinx",
-    # "sphinx_gallery.load_style",
     "sphinx_copybutton",
     "myst_nb",
     "sphinx_thebe",
-    # "myst_parser",
-    # "sphinx_panels",
+    "sphinx_favicon",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -109,7 +106,7 @@ master_doc = "index"
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+language = "en"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -127,7 +124,7 @@ pygments_style = "sphinx"
 #
 html_theme = "sphinx_book_theme"
 
-html_logo = "./_static/images/magpylib_logo.png"
+html_logo = "./_static/images/magpylib_flag.png"
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
@@ -138,8 +135,36 @@ html_theme_options = {
     "repository_branch": release,
     "use_repository_button": True,
     "use_download_button": True,
-    "launch_buttons": {"binderhub_url": "https://mybinder.org", "thebe": True},
+    "use_source_button": True,
+    "use_edit_page_button": True,
+    "use_issues_button": True,
+    "launch_buttons": {
+        "binderhub_url": "https://mybinder.org",
+        "thebe": True,
+        "notebook_interface": "jupyterlab",
+    },
+    "icon_links": [
+        {
+            "name": "Github",
+            "url": "https://github.com/magpylib/magpylib",
+            "icon": "https://img.shields.io/github/stars/magpylib/magpylib?style=social",
+            "type": "url",
+        },
+        {
+            "name": "PyPI",
+            "url": "https://pypi.org/project/magpylib/",
+            "icon": "https://img.shields.io/pypi/v/magpylib",
+            "type": "url",
+        },
+        {
+            "name": "Conda",
+            "url": "https://anaconda.org/conda-forge/magpylib",
+            "icon": "https://img.shields.io/conda/vn/conda-forge/magpylib",
+            "type": "url",
+        },
+    ],
 }
+
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
@@ -260,22 +285,7 @@ copybutton_prompt_is_regexp = True
 
 html_js_files = [
     "https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js",
-    "https://unpkg.com/thebe@latest/lib/index.js",
+    # "https://unpkg.com/thebe@latest/lib/index.js",
 ]
 
-mathjax_path = "https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=TeX-MML-AM_CHTML"
-mathjax2_config = {
-    "tex2jax": {
-        "inlineMath": [["$", "$"], ["\\(", "\\)"]],
-        "processEscapes": True,
-        "ignoreClass": "document",
-        "processClass": "math|output_area",
-    }
-}
-
-# needed for sphinx >= 4.3
-mathjax_options = {
-    "async": "async",
-}
-
-myst_update_mathjax = False
+suppress_warnings = ["mystnb.unknown_mime_type"]
