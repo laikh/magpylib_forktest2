@@ -16,7 +16,7 @@ Magpylib is a Python package for calculating **3D static magnetic fields** of pe
 
 # Quickstart
 
-Magpylib is on PyPI and conda-forge. **Install using pip** (`pip install magpylib`) or **conda** (`conda install magpylib`) package managers.
+Magpylib is on PyPI and conda-forge. **Install using pip** (`pip install magpylib`) or **conda** (`conda install -c conda-forge magpylib`) package managers.
 
 The following **Example code** outlines the core functionality:
 
