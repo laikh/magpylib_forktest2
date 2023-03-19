@@ -19,20 +19,23 @@ jobs:
   build:
     docker:
       - image: python:3.9
+        environment:
+          # Set the environment variables required for your project
+          MAYAVI_REQUIRES: vtk,pyqt5
+          MAYAVI_OPTIONAL: apptools,envisage,traits,traitsui,pyface,tvtk
     steps:
       - checkout
-      - run:
-          name: Specific depedencies for pyvista
-          command: |
-            apt update
-            apt-get install -y python3-pyqt5
-            apt-get install -y libgl1-mesa-dev xvfb
       - run:
           name: Install local magpylib
           command: pip install .[dev]
       - run:
           name: Set up testing tools and environment
-          command: mkdir test-results && pip install tox && pip install pylint
+          command: mkdir test-results && pip install tox && pip install pylint && pip install $MAYAVI_REQUIRES $MAYAVI_OPTIONAL
+      - run:
+          name: Specific depedencies for pyvista
+          command: |
+            apt update
+            apt-get install -y libgl1-mesa-dev xvfb
       - run:
           name: Run pylint test
           command: pylint --rcfile='./.pylintrc' magpylib
