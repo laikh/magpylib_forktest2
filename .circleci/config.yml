@@ -41,7 +41,7 @@ jobs:
           command: pylint --rcfile='./.pylintrc' magpylib
       - run:
           name: Run code test coverage suite
-          command: tox
+          command: pytest
 
   deploy:
     docker:
