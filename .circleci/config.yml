@@ -26,7 +26,6 @@ jobs:
           command: |
             apt update
             apt-get install -y libgl1-mesa-dev xvfb
-            apt-get install mayavi
       - run:
           name: Install local magpylib
           command: pip install .[dev]
