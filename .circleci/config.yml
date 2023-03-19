@@ -21,8 +21,7 @@ jobs:
       - image: python:3.9
         environment:
           # Set the environment variables required for your project
-          MAYAVI_REQUIRES: vtk pyqt5
-          MAYAVI_OPTIONAL: apptools envisage traits traitsui pyface vtk
+          MAYAVI_REQUIRES: vtk pyqt4
     steps:
       - checkout
       - run:
@@ -30,7 +29,7 @@ jobs:
           command: pip install .[dev]
       - run:
           name: Set up testing tools and environment
-          command: mkdir test-results && pip install tox && pip install pylint && pip install $MAYAVI_REQUIRES $MAYAVI_OPTIONAL
+          command: mkdir test-results && pip install tox && pip install pylint && pip install $MAYAVI_REQUIRES
       - run:
           name: Specific depedencies for pyvista
           command: |
