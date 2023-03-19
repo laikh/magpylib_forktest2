@@ -1,15 +1,10 @@
 from functools import lru_cache
 
+import mayavi
 import numpy as np
 from matplotlib.colors import colorConverter
+from mayavi import mlab
 
-try:
-    from mayavi import mlab
-except ImportError as missing_module:  # pragma: no cover
-    raise ModuleNotFoundError(
-        """In order to use the mayavi plotting backend, you need to install mayavi via pip or
-        conda, see https://docs.enthought.com/mayavi/mayavi/installation.html"""
-    ) from missing_module
 from magpylib._src.display.traces_generic import get_frames
 from magpylib._src.display.traces_utility import subdivide_mesh_by_facecolor
 
