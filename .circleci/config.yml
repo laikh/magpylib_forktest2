@@ -22,17 +22,11 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Specific depedencies for pyvista or mayavi
+          name: Specific depedencies for pyvista
           command: |
             apt update
             apt-get install -y libgl1-mesa-dev xvfb
-            apt-get install -y --no-install-recommends xvfb libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0
-            apt-get clean -y
-            python3 -m pip install vtk
-            apt-get update && apt-get install -y python3-opencv && apt-get clean -y
-            pip3 install opencv-python
-            pip3 install PyVirtualDisplay
-            pip3 install mayavi PyQt5
+            apt-get install mayavi
       - run:
           name: Install local magpylib
           command: pip install .[dev]
