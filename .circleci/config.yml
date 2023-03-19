@@ -22,7 +22,7 @@ jobs:
         environment:
           # Set the environment variables required for your project
           MAYAVI_REQUIRES: vtk pyqt5
-          MAYAVI_OPTIONAL: apptools envisage traits traitsui pyface tvtk
+          MAYAVI_OPTIONAL: apptools envisage traits traitsui pyface vtk
     steps:
       - checkout
       - run:
