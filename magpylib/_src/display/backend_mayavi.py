@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-import mayavi
+import mayavi  # pylint: disable=unused-import
 import numpy as np
 from matplotlib.colors import colorConverter
 from mayavi import mlab
