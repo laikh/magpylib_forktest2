@@ -87,9 +87,10 @@ class Display(MagicProperties):
 
     @backend.setter
     def backend(self, val):
-        assert val is None or val in SUPPORTED_PLOTTING_BACKENDS, (
+        backends = [*SUPPORTED_PLOTTING_BACKENDS, "auto"]
+        assert val is None or val in backends, (
             f"the `backend` property of {type(self).__name__} must be one of"
-            f"{SUPPORTED_PLOTTING_BACKENDS}"
+            f"{backends}"
             f" but received {repr(val)} instead"
         )
         self._backend = val
@@ -107,11 +108,19 @@ class Display(MagicProperties):
 
     @colorsequence.setter
     def colorsequence(self, val):
-        assert val is None or all(color_validator(c, allow_None=False) for c in val), (
-            f"the `colorsequence` property of {type(self).__name__} must be one an iterable of"
-            f"color sequences"
-            f" but received {repr(val)} instead"
-        )
+        if val is not None:
+            name = type(self).__name__
+            try:
+                val = tuple(
+                    color_validator(c, allow_None=False, parent_name=f"{name}")
+                    for c in val
+                )
+            except TypeError as err:
+                raise ValueError(
+                    f"The `colorsequence` property of {name} must be an "
+                    f"iterable of colors but received {val!r} instead"
+                ) from err
+
         self._colorsequence = val
 
     @property

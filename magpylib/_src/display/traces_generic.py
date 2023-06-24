@@ -1,13 +1,17 @@
 """Generic trace drawing functionalities"""
 # pylint: disable=C0302
 # pylint: disable=too-many-branches
+# pylint: disable=too-many-nested-blocks
 # pylint: disable=cyclic-import
+# pylint: disable=too-many-statements
 import numbers
 import warnings
 from itertools import combinations
+from itertools import cycle
 from typing import Tuple
 
 import numpy as np
+from scipy.spatial import distance
 from scipy.spatial.transform import Rotation as RotScipy
 
 import magpylib as magpy
@@ -39,10 +43,11 @@ from magpylib._src.display.traces_utility import group_traces
 from magpylib._src.display.traces_utility import merge_mesh3d
 from magpylib._src.display.traces_utility import merge_traces
 from magpylib._src.display.traces_utility import place_and_orient_model3d
+from magpylib._src.display.traces_utility import slice_mesh_from_colorscale
 from magpylib._src.display.traces_utility import triangles_area
 from magpylib._src.input_checks import check_excitations
+from magpylib._src.style import DefaultMarkers
 from magpylib._src.style import get_style
-from magpylib._src.style import Markers
 from magpylib._src.utility import format_obj_input
 from magpylib._src.utility import unit_prefix
 
@@ -51,7 +56,7 @@ class MagpyMarkers:
     """A class that stores markers 3D-coordinates."""
 
     def __init__(self, *markers):
-        self.style = Markers()
+        self.style = DefaultMarkers()
         self.markers = np.array(markers)
 
     def _draw_func(self, color=None, style=None, **kwargs):
@@ -83,8 +88,6 @@ class MagpyMarkers:
 
 def make_DefaultTrace(
     obj,
-    position=(0.0, 0.0, 0.0),
-    orientation=None,
     color=None,
     style=None,
     **kwargs,
@@ -107,15 +110,11 @@ def make_DefaultTrace(
     }
     update_trace_name(trace, f"{type(obj).__name__}", "", style)
     trace["text"] = trace["name"]
-    return place_and_orient_model3d(
-        trace, orientation=orientation, position=position, **kwargs
-    )
+    return {**trace, **kwargs}
 
 
 def make_Line(
     obj,
-    position=(0.0, 0.0, 0.0),
-    orientation=None,
     color=None,
     style=None,
     **kwargs,
@@ -149,15 +148,11 @@ def make_Line(
         else " (Current not initialized)"
     )
     update_trace_name(trace, "Line", default_suffix, style)
-    return place_and_orient_model3d(
-        trace, orientation=orientation, position=position, **kwargs
-    )
+    return {**trace, **kwargs}
 
 
 def make_Loop(
     obj,
-    position=(0.0, 0.0, 0.0),
-    orientation=None,
     color=None,
     style=None,
     vertices=50,
@@ -188,15 +183,11 @@ def make_Loop(
         else " (Current not initialized)"
     )
     update_trace_name(trace, "Loop", default_suffix, style)
-    return place_and_orient_model3d(
-        trace, orientation=orientation, position=position, **kwargs
-    )
+    return {**trace, **kwargs}
 
 
 def make_Dipole(
     obj,
-    position=(0.0, 0.0, 0.0),
-    orientation=None,
     color=None,
     style=None,
     autosize=None,
@@ -233,10 +224,88 @@ def make_Dipole(
     t = np.arccos(dot)
     vec = -t * cross / n
     mag_orient = RotScipy.from_rotvec(vec)
-    orientation = orientation * mag_orient
-    return place_and_orient_model3d(
-        trace, orientation=orientation, position=position, **kwargs
-    )
+    trace = place_and_orient_model3d(trace, orientation=mag_orient, **kwargs)
+    return {**trace, **kwargs}
+
+
+def make_mesh_lines(
+    obj,
+    pos_orient_inds,
+    mode,
+    label=None,
+    style=None,
+    color=None,  # pylint: disable=unused-argument
+    **kwargs,
+):
+    """Draw open or self-intersecting mesh lines and vertices"""
+    # pylint: disable=protected-access
+    style = obj.style if style is None else style
+    mesh = getattr(style.mesh, mode)
+    marker, line = mesh.marker, mesh.line
+    tr, vert = obj.faces, obj.vertices
+    if mode == "disconnected":
+        subsets = obj.get_faces_subsets()
+        lines = get_closest_vertices(subsets, vert)
+    else:
+        edges = np.concatenate([tr[:, 0:2], tr[:, 1:3], tr[:, ::2]], axis=0)
+        # make sure unique pairs are found regardless of order
+        edges = np.sort(edges, axis=1)
+        edges_uniq, edges_counts = np.unique(edges, axis=0, return_counts=True)
+        if mode == "open":
+            lines = vert[edges_uniq[edges_counts != 2]]
+        else:
+            lines = vert[edges_uniq]
+
+    out = {}
+    if lines.size != 0:
+        label = f"{obj}" if label is None else label
+        lines = np.insert(lines, 2, None, axis=1).reshape(-1, 3)
+        traces = []
+        for ind in pos_orient_inds:
+            x, y, z = (obj._orientation[ind].apply(lines) + obj._position[ind]).T
+            trace = {
+                "type": "scatter3d",
+                "x": x,
+                "y": y,
+                "z": z,
+                "marker_color": marker.color,
+                "marker_size": marker.size,
+                "marker_symbol": marker.symbol,
+                "line_color": line.color,
+                "line_width": line.width,
+                "line_dash": line.style,
+                "legendgroup": f"{obj}{mode}edges",
+                "name": f"{label} - {mode}-edges",
+            }
+            traces.append(trace)
+        out = {**merge_traces(*traces), **kwargs}
+    return out
+
+
+def get_closest_vertices(faces_subsets, vertices):
+    """Get closest pairs of points between disconnected subsets of faces indices"""
+    nparts = len(faces_subsets)
+    inds_subsets = [np.unique(v) for v in faces_subsets]
+    closest_verts_list = []
+    if nparts > 1:
+        connected = [np.min(inds_subsets[0])]
+        while len(connected) < nparts:
+            prev_min = float("inf")
+            for i in connected:
+                for j in range(nparts):
+                    if j not in connected:
+                        tr1, tr2 = inds_subsets[i], inds_subsets[j]
+                        c1, c2 = vertices[tr1], vertices[tr2]
+                        dist = distance.cdist(c1, c2)
+                        i1, i2 = divmod(dist.argmin(), dist.shape[1])
+                        min_dist = dist[i1, i2]
+                        if min_dist < prev_min:
+                            prev_min = min_dist
+                            closest_verts = [c1[i1], c2[i2]]
+                            connected_ind = j
+            connected.append(connected_ind)
+            closest_verts_list.append(closest_verts)
+    return np.array(closest_verts_list)
 
 
 def make_triangle_orientations(
@@ -259,46 +328,45 @@ def make_triangle_orientations(
     size = size if style.orientation.size is None else style.orientation.size
     offset = offset if style.orientation.offset is None else style.orientation.offset
     symbol = symbol if style.orientation.symbol is None else style.orientation.symbol
-    vert = obj.vertices
-    vec = np.cross(vert[1] - vert[0], vert[2] - vert[1])
-    nvec = vec / np.linalg.norm(vec)
-    # arrow length proportional to square root of triangle
-    length = np.sqrt(triangles_area(np.expand_dims(vert, axis=0))[0]) * 0.2
-    zaxis = np.array([0, 0, 1])
-    cross = np.cross(nvec, zaxis)
-    n = np.linalg.norm(cross)
-    if n == 0:
-        n = 1
-        cross = np.array([-np.sign(nvec[-1]), 0, 0])
-    dot = np.dot(nvec, zaxis)
-    t = np.arccos(dot)
-    vec = -t * cross / n
-    orient = RotScipy.from_rotvec(vec)
+    vertices = obj.mesh if hasattr(obj, "mesh") else [obj.vertices]
     traces = []
-    make_fn = make_BasePyramid if symbol == "cone" else make_BaseArrow
-    vmean = np.mean(vert, axis=0)
-    vmean -= (1 - offset) * length * nvec * size
-    for ind in pos_orient_inds:
-        tr = make_fn(
-            "plotly-dict",
-            base=10,
-            diameter=0.5 * size * length,
-            height=size * length,
-            pivot="tail",
-            color=color,
-            position=obj._orientation[ind].apply(vmean) + obj._position[ind],
-            orientation=obj._orientation[ind] * orient,
-            **kwargs,
-        )
-        traces.append(tr)
+    for vert in vertices:
+        vec = np.cross(vert[1] - vert[0], vert[2] - vert[1])
+        nvec = vec / np.linalg.norm(vec)
+        # arrow length proportional to square root of triangle
+        length = np.sqrt(triangles_area(np.expand_dims(vert, axis=0))[0]) * 0.2
+        zaxis = np.array([0, 0, 1])
+        cross = np.cross(nvec, zaxis)
+        n = np.linalg.norm(cross)
+        if n == 0:
+            n = 1
+            cross = np.array([-np.sign(nvec[-1]), 0, 0])
+        dot = np.dot(nvec, zaxis)
+        t = np.arccos(dot)
+        vec = -t * cross / n
+        orient = RotScipy.from_rotvec(vec)
+        make_fn = make_BasePyramid if symbol == "cone" else make_BaseArrow
+        vmean = np.mean(vert, axis=0)
+        vmean -= (1 - offset) * length * nvec * size
+        for ind in pos_orient_inds:
+            tr = make_fn(
+                "plotly-dict",
+                base=10,
+                diameter=0.5 * size * length,
+                height=size * length,
+                pivot="tail",
+                color=color,
+                position=obj._orientation[ind].apply(vmean) + obj._position[ind],
+                orientation=obj._orientation[ind] * orient,
+                **kwargs,
+            )
+            traces.append(tr)
     trace = merge_mesh3d(*traces)
     return trace
 
 
 def make_Cuboid(
     obj,
-    position=(0.0, 0.0, 0.0),
-    orientation=None,
     color=None,
     style=None,
     **kwargs,
@@ -313,18 +381,11 @@ def make_Cuboid(
     trace = make_BaseCuboid("plotly-dict", dimension=dimension, color=color)
     default_suffix = f" ({d[0]}m|{d[1]}m|{d[2]}m)"
     update_trace_name(trace, "Cuboid", default_suffix, style)
-    update_magnet_mesh(
-        trace, mag_style=style.magnetization, magnetization=obj.magnetization
-    )
-    return place_and_orient_model3d(
-        trace, orientation=orientation, position=position, **kwargs
-    )
+    return {**trace, **kwargs}
 
 
 def make_Cylinder(
     obj,
-    position=(0.0, 0.0, 0.0),
-    orientation=None,
     color=None,
     style=None,
     base=50,
@@ -342,18 +403,11 @@ def make_Cylinder(
     )
     default_suffix = f" (D={d[0]}m, H={d[1]}m)"
     update_trace_name(trace, "Cylinder", default_suffix, style)
-    update_magnet_mesh(
-        trace, mag_style=style.magnetization, magnetization=obj.magnetization
-    )
-    return place_and_orient_model3d(
-        trace, orientation=orientation, position=position, **kwargs
-    )
+    return {**trace, **kwargs}
 
 
 def make_CylinderSegment(
     obj,
-    position=(0.0, 0.0, 0.0),
-    orientation=None,
     color=None,
     style=None,
     vertices=25,
@@ -371,18 +425,11 @@ def make_CylinderSegment(
     )
     default_suffix = f" (r={d[0]}m|{d[1]}m, h={d[2]}m, φ={d[3]}°|{d[4]}°)"
     update_trace_name(trace, "CylinderSegment", default_suffix, style)
-    update_magnet_mesh(
-        trace, mag_style=style.magnetization, magnetization=obj.magnetization
-    )
-    return place_and_orient_model3d(
-        trace, orientation=orientation, position=position, **kwargs
-    )
+    return {**trace, **kwargs}
 
 
 def make_Sphere(
     obj,
-    position=(0.0, 0.0, 0.0),
-    orientation=None,
     color=None,
     style=None,
     vertices=15,
@@ -400,18 +447,11 @@ def make_Sphere(
     )
     default_suffix = f" (D={unit_prefix(diameter / 1000)}m)"
     update_trace_name(trace, "Sphere", default_suffix, style)
-    update_magnet_mesh(
-        trace, mag_style=style.magnetization, magnetization=obj.magnetization
-    )
-    return place_and_orient_model3d(
-        trace, orientation=orientation, position=position, **kwargs
-    )
+    return {**trace, **kwargs}
 
 
 def make_Tetrahedron(
     obj,
-    position=(0.0, 0.0, 0.0),
-    orientation=None,
     color=None,
     style=None,
     **kwargs,
@@ -423,18 +463,11 @@ def make_Tetrahedron(
     style = obj.style if style is None else style
     trace = make_BaseTetrahedron("plotly-dict", vertices=obj.vertices, color=color)
     update_trace_name(trace, "Tetrahedron", "", style)
-    update_magnet_mesh(
-        trace, mag_style=style.magnetization, magnetization=obj.magnetization
-    )
-    return place_and_orient_model3d(
-        trace, orientation=orientation, position=position, **kwargs
-    )
+    return {**trace, **kwargs}
 
 
 def make_Triangle(
     obj,
-    position=(0.0, 0.0, 0.0),
-    orientation=None,
     color=None,
     style=None,
     **kwargs,
@@ -445,13 +478,13 @@ def make_Triangle(
     """
     vert = obj.vertices
     vec = np.cross(vert[1] - vert[0], vert[2] - vert[1])
-    triangles = np.array([[0, 1, 2]])
+    faces = np.array([[0, 1, 2]])
     # if magnetization is normal to the triangle, add a second triangle slightly above to enable
     # proper color gradient visualization. Otherwise only the middle color is shown.
     if np.all(np.cross(obj.magnetization, vec) == 0):
         epsilon = 1e-3 * vec
         vert = np.concatenate([vert - epsilon, vert + epsilon])
-        side_triangles = [
+        side_faces = [
             [0, 1, 3],
             [1, 2, 4],
             [2, 0, 5],
@@ -459,19 +492,36 @@ def make_Triangle(
             [2, 5, 4],
             [0, 3, 5],
         ]
-        triangles = np.concatenate([triangles, [[3, 4, 5]], side_triangles])
+        faces = np.concatenate([faces, [[3, 4, 5]], side_faces])
 
     style = obj.style if style is None else style
     trace = make_BaseTriangularMesh(
-        "plotly-dict", vertices=vert, triangles=triangles, color=color
+        "plotly-dict", vertices=vert, faces=faces, color=color
     )
     update_trace_name(trace, obj.__class__.__name__, "", style)
-    update_magnet_mesh(
-        trace, mag_style=style.magnetization, magnetization=obj.magnetization
+    return {**trace, **kwargs}
+
+
+def make_TriangularMesh(
+    obj,
+    color=None,
+    style=None,
+    **kwargs,
+) -> dict:
+    """
+    Creates the plotly mesh3d parameters for a Trianglular facet mesh in a dictionary based on the
+    provided arguments.
+    """
+    style = obj.style if style is None else style
+    trace = make_BaseTriangularMesh(
+        "plotly-dict", vertices=obj.vertices, faces=obj.faces, color=color
     )
-    return place_and_orient_model3d(
-        trace, orientation=orientation, position=position, **kwargs
-    )
+    ntri = len(obj.faces)
+    default_suffix = f" ({ntri} face{'s'[:ntri^1]})"
+    update_trace_name(trace, obj.__class__.__name__, default_suffix, style)
+    # make edges sharper in plotly
+    trace.update(flatshading=True, lighting_facenormalsepsilon=0, lighting_ambient=0.7)
+    return {**trace, **kwargs}
 
 
 def make_Pixels(positions, size=1) -> dict:
@@ -488,8 +538,6 @@ def make_Pixels(positions, size=1) -> dict:
 
 def make_Sensor(
     obj,
-    position=(0.0, 0.0, 0.0),
-    orientation=None,
     color=None,
     style=None,
     autosize=None,
@@ -507,7 +555,7 @@ def make_Sensor(
     style = obj.style if style is None else style
     dimension = getattr(obj, "dimension", style.size)
     pixel = obj.pixel
-    pixel = np.array(pixel).reshape((-1, 3))
+    pixel = np.unique(np.array(pixel).reshape((-1, 3)), axis=0)
     style_arrows = style.arrows.as_dict(flatten=True, separator="_")
     sensor = get_sensor_mesh(**style_arrows, center_color=color)
     vertices = np.array([sensor[k] for k in "xyz"]).T
@@ -517,11 +565,15 @@ def make_Sensor(
         [dimension] * 3 if isinstance(dimension, (float, int)) else dimension[:3],
         dtype=float,
     )
+    no_pix = pixel.shape[0] == 1 and (pixel == 0).all()
+    one_pix = pixel.shape[0] == 1 and not (pixel == 0).all()
     if autosize is not None:
         dim *= autosize
-    if pixel.shape[0] == 1:
+    if no_pix:
         dim_ext = dim
     else:
+        if one_pix:
+            pixel = np.concatenate([[[0, 0, 0]], pixel])
         hull_dim = pixel.max(axis=0) - pixel.min(axis=0)
         dim_ext = max(np.mean(dim), np.min(hull_dim))
     cube_mask = (vertices < 1).all(axis=1)
@@ -531,16 +583,18 @@ def make_Sensor(
     x, y, z = vertices.T
     sensor.update(x=x, y=y, z=z)
     meshes_to_merge = [sensor]
-    if pixel.shape[0] != 1:
+    if not no_pix:
         pixel_color = style.pixel.color
         pixel_size = style.pixel.size
         combs = np.array(list(combinations(pixel, 2)))
         vecs = np.diff(combs, axis=1)
         dists = np.linalg.norm(vecs, axis=2)
-        pixel_dim = np.min(dists) / 2
+        min_dist = np.min(dists)
+        pixel_dim = dim_ext / 5 if min_dist == 0 else min_dist / 2
         if pixel_size > 0:
             pixel_dim *= pixel_size
-            pixels_mesh = make_Pixels(positions=pixel, size=pixel_dim)
+            poss = pixel[1:] if one_pix else pixel
+            pixels_mesh = make_Pixels(positions=poss, size=pixel_dim)
             pixels_mesh["facecolor"] = np.repeat(pixel_color, len(pixels_mesh["i"]))
             meshes_to_merge.append(pixels_mesh)
         hull_pos = 0.5 * (pixel.max(axis=0) + pixel.min(axis=0))
@@ -552,20 +606,24 @@ def make_Sensor(
         meshes_to_merge.append(hull_mesh)
     trace = merge_mesh3d(*meshes_to_merge)
     default_suffix = (
-        f""" ({'x'.join(str(p) for p in pixel.shape[:-1])} pixels)"""
-        if pixel.ndim != 1
+        f" ({'x'.join(str(p) for p in obj.pixel.shape[:-1])} pixels)"
+        if obj.pixel.ndim != 1
+        else f" ({pixel[1:].shape[0]} pixel)"
+        if one_pix
         else ""
     )
     update_trace_name(trace, "Sensor", default_suffix, style)
-    return place_and_orient_model3d(
-        trace, orientation=orientation, position=position, **kwargs
-    )
+    return {**trace, **kwargs}
 
 
-def update_magnet_mesh(mesh_dict, mag_style=None, magnetization=None):
+def update_magnet_mesh(
+    mesh_dict, mag_style=None, magnetization=None, color_slicing=False
+):
     """
     Updates an existing plotly mesh3d dictionary of an object which has a magnetic vector. The
     object gets colorized, positioned and oriented based on provided arguments.
+    Slicing allows for matplotlib to show colorgradients approximations by slicing the mesh into
+    the colorscales colors, remesh it and merge with assigning facecolor for each part.
     """
     mag_color = mag_style.color
     if magnetization is not None and mag_style.show:
@@ -575,17 +633,24 @@ def update_magnet_mesh(mesh_dict, mag_style=None, magnetization=None):
             color_middle = mesh_dict["color"]
         elif mag_color.mode == "bicolor":
             color_middle = False
-        mesh_dict["colorscale"] = getColorscale(
-            color_transition=mag_color.transition,
+        ct = mag_color.transition
+        cs = getColorscale(
+            color_transition=0 if color_slicing else ct,
             color_north=mag_color.north,
             color_middle=color_middle,
             color_south=mag_color.south,
         )
-        mesh_dict["intensity"] = getIntensity(
-            vertices=vertices,
-            axis=magnetization,
-        )
+        if color_slicing:
+            tr = slice_mesh_from_colorscale(mesh_dict, magnetization, cs)
+            mesh_dict.update(tr)
+        else:
+            mesh_dict["colorscale"] = cs
+            mesh_dict["intensity"] = getIntensity(
+                vertices=vertices,
+                axis=magnetization,
+            )
         mesh_dict["showscale"] = False
+        mesh_dict.pop("color_slicing", None)
     return mesh_dict
 
 
@@ -618,6 +683,8 @@ def make_mag_arrows(obj, pos_orient_inds, style, legendgroup, kwargs):
         length = obj.diameter  # Sphere
     elif isinstance(obj, magpy.misc.Triangle):
         length = np.amax(obj.vertices) - np.amin(obj.vertices)
+    elif hasattr(obj, "mesh"):
+        length = np.amax(np.ptp(obj.mesh.reshape(-1, 3), axis=0))
     elif hasattr(obj, "vertices"):
         length = np.amax(np.ptp(obj.vertices, axis=0))
     else:  # Cuboid, Cylinder, CylinderSegment
@@ -714,6 +781,7 @@ def get_generic_traces(
     # pylint: disable=import-outside-toplevel
 
     from magpylib._src.obj_classes.class_misc_Triangle import Triangle
+    from magpylib._src.obj_classes.class_magnet_TriangularMesh import TriangularMesh
 
     # parse kwargs into style and non style args
     style = get_style(input_obj, Config, **kwargs)
@@ -725,13 +793,13 @@ def get_generic_traces(
     legendgroup = f"{input_obj}" if legendgroup is None else legendgroup
 
     is_mag_arrows = False
-    if getattr(input_obj, "magnetization", None) is not None:
-        mode = style.magnetization.mode
-        if style.magnetization.show:
-            if "arrow" in mode or not mag_color_grad_apt:
-                is_mag_arrows = True
-            if mag_color_grad_apt and "color" not in mode and mode != "auto":
-                style.magnetization.show = False  # disables color gradient only
+    is_mag = hasattr(input_obj, "magnetization")
+    if is_mag and style.magnetization.show:
+        mag = style.magnetization
+        if mag.mode == "auto":
+            mag.mode = "color"  # if mag_color_grad_apt else "arrow"
+        is_mag_arrows = "arrow" in mag.mode
+        mag.show = "color" in mag.mode
 
     # check excitations validity
     for param in ("magnetization", "arrow"):
@@ -762,11 +830,59 @@ def get_generic_traces(
     orientations, positions, pos_orient_inds = get_rot_pos_from_path(
         input_obj, style.path.frames
     )
+    obj_is_disconnected = False
+    if isinstance(input_obj, TriangularMesh):
+        for mode in ("open", "disconnected"):
+            show_mesh = getattr(style.mesh, mode).show
+            if mode == "open" and show_mesh:
+                if input_obj.status_open is None:
+                    warnings.warn(
+                        f"Unchecked open mesh status in {input_obj!r} detected, before attempting "
+                        "to show potential open edges, which may take a while to compute "
+                        "when the mesh has many faces, now applying operation..."
+                    )
+                    input_obj.check_open()
+            elif mode == "disconnected" and show_mesh:
+                if input_obj.status_disconnected is None:
+                    warnings.warn(
+                        f"Unchecked disconnected mesh status in {input_obj!r} detected, before "
+                        "attempting to show possible disconnected parts, which may take a while "
+                        "to compute when the mesh has many faces, now applying operation..."
+                    )
+                obj_is_disconnected = input_obj.check_disconnected()
+    disconnected_traces = []
     for pos_orient_enum, (orient, pos) in enumerate(zip(orientations, positions)):
         if style.model3d.showdefault and make_func is not None:
-            path_traces.append(
-                make_func(position=pos, orientation=orient, **make_func_kwargs)
-            )
+            if obj_is_disconnected:
+                tria_orig = input_obj._faces
+                mag_show = style.magnetization.show
+                for tri, dis_color in zip(
+                    input_obj.get_faces_subsets(),
+                    cycle(style.mesh.disconnected.colorsequence),
+                ):
+                    # temporary mutate faces from subset
+                    input_obj._faces = tri
+                    style.magnetization.show = False
+                    dis_tr = make_func(
+                        **{**make_func_kwargs, "color": dis_color},
+                    )
+                    dis_tr = place_and_orient_model3d(
+                        dis_tr, orientation=orient, position=pos
+                    )
+                    disconnected_traces.append(dis_tr)
+                input_obj._faces = tria_orig
+                style.magnetization.show = mag_show
+            else:  # if disconnnected, no mag slicing needed
+                p_tr = make_func(**make_func_kwargs)
+                if is_mag:
+                    p_tr = update_magnet_mesh(
+                        p_tr,
+                        mag_style=style.magnetization,
+                        magnetization=input_obj.magnetization,
+                        color_slicing=not mag_color_grad_apt,
+                    )
+                p_tr = place_and_orient_model3d(p_tr, orientation=orient, position=pos)
+                path_traces.append(p_tr)
         for extr in extra_model3d_traces:
             if extr.show:
                 extr.update(extr.updatefunc())
@@ -848,6 +964,20 @@ def get_generic_traces(
             trace["name"] = legendtext
         traces.append(trace)
 
+    if disconnected_traces:
+        nsubsets = len(input_obj.get_faces_subsets())
+        for ind in range(nsubsets):
+            trace = merge_traces(*disconnected_traces[ind::nsubsets])
+            trace.update(
+                {
+                    "legendgroup": f"{legendgroup} - part_{ind+1:02d}",
+                    "showlegend": True if showlegend is None else showlegend,
+                }
+            )
+            lg = trace.get("name", "") if legendtext is None else legendtext
+            trace["name"] = f"{lg} - part_{ind+1:02d}"
+            traces.append(trace)
+
     if np.array(input_obj.position).ndim > 1 and style.path.show:
         scatter_path = make_path(input_obj, style, legendgroup, kwargs)
         traces.append(scatter_path)
@@ -856,13 +986,20 @@ def get_generic_traces(
         traces.append(
             make_mag_arrows(input_obj, pos_orient_inds, style, legendgroup, kwargs)
         )
-    if isinstance(input_obj, Triangle) and style.orientation.show:
+    if isinstance(input_obj, (Triangle, TriangularMesh)) and style.orientation.show:
         traces.append(
             make_triangle_orientations(
                 input_obj, pos_orient_inds, legendgroup=legendgroup, **kwargs
             )
         )
-
+    if isinstance(input_obj, TriangularMesh):
+        for mode in ("grid", "open", "disconnected"):
+            if getattr(style.mesh, mode).show:
+                trace = make_mesh_lines(
+                    input_obj, pos_orient_inds, mode, label, **kwargs
+                )
+                if trace:
+                    traces.append(trace)
     out = (traces,)
     if extra_backend is not False:
         out += (path_traces_extra_specific_backend,)

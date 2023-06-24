@@ -6,7 +6,7 @@
 ###
 # Local install:
 #   Create virtual environment:
-#   $ conda create -n packCondaTest python=3.7.1 anaconda
+#   $ conda create -n packCondaTest python=3.8.1 anaconda
 #   Activate:
 #   $ conda activate packCondaTest
 #   Generate distribution files (untracked by git):
@@ -21,7 +21,7 @@ import sys
 import setuptools
 from setuptools.command.install import install
 
-_magPyVersion = "4.2.0"
+_magPyVersion = "4.3.0"
 _SphinxVersion = "5.3.0"
 _name = "magpylib"
 _description = "Free Python3 package to compute magnetic fields."
@@ -75,6 +75,7 @@ setuptools.setup(
             "coverage",
             "pylint",
             "jupyterlab>=3.2",
+            "jupyterlab_myst",
             "sphinx==4.4.0",
             "pandas",
             "pyvista",
@@ -84,17 +85,17 @@ setuptools.setup(
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
         "Intended Audience :: Developers",
         "Intended Audience :: Science/Research",
         "Intended Audience :: Education",
         "License :: OSI Approved :: BSD License",
         "Operating System :: OS Independent",
     ],
-    python_requires="~=3.7",
+    python_requires="~=3.8",
     keywords="magnetism physics analytical parallel electromagnetic fields b-field",
     command_options={
         "build_sphinx": {

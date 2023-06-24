@@ -10,7 +10,7 @@ DEFAULTS = {
             "time": 5,
             "slider": True,
         },
-        "backend": "matplotlib",
+        "backend": "auto",
         "colorsequence": (
             "#2E91E5",
             "#E15F99",
@@ -95,6 +95,40 @@ DEFAULTS = {
                     "color": "grey",
                     "offset": 0.9,
                     "symbol": "arrow3d",
+                },
+            },
+            "triangularmesh": {
+                "orientation": {
+                    "show": False,
+                    "size": 1,
+                    "color": "grey",
+                    "offset": 0.9,
+                    "symbol": "arrow3d",
+                },
+                "mesh": {
+                    "grid": {
+                        "show": False,
+                        "line": {"width": 2, "style": "solid", "color": "black"},
+                        "marker": {"size": 1, "symbol": "o", "color": "black"},
+                    },
+                    "open": {
+                        "show": False,
+                        "line": {"width": 2, "style": "solid", "color": "cyan"},
+                        "marker": {"size": 1, "symbol": "o", "color": "black"},
+                    },
+                    "disconnected": {
+                        "show": False,
+                        "line": {"width": 2, "style": "solid", "color": "black"},
+                        "marker": {"size": 5, "symbol": "o", "color": "black"},
+                        "colorsequence": (
+                            "red",
+                            "blue",
+                            "green",
+                            "cyan",
+                            "magenta",
+                            "yellow",
+                        ),
+                    },
                 },
             },
             "markers": {"marker": {"size": 2, "color": "grey", "symbol": "x"}},

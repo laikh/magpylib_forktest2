@@ -5,10 +5,10 @@
 
 # What is Magpylib ?
 
-Magpylib is a Python package for calculating **3D static magnetic fields** of permanent magnets, currents and other sources. The computation is based on analytical expressions and therefore **extremely fast**. A **user friendly API** combined with **graphic output** enables convenient positioning of sources and observers.
+Magpylib is a Python package for calculating **3D static magnetic fields** of permanent magnets, currents and other sources. The computation is based on analytical expressions and therefore **extremely fast**. A **user friendly API** combined with **graphic output** enables convenient positioning of sources and observers relative to each other.
 
 ```{image} _static/images/index/source_fundamentals.png
-:alt: source fundamentals
+:alt: sketch of magpylib basic functionality
 :align: center
 ```
 
@@ -56,6 +56,7 @@ examples/examples_03_collections.md
 examples/examples_21_compound.md
 examples/examples_01_complex_forms.md
 examples/examples_06_triangle.md
+examples/examples_07_triangularmesh.md
 examples/examples_04_custom_source.md
 ```
 
